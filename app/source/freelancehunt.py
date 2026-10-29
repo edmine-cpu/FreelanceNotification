@@ -85,6 +85,15 @@ class FreelancehuntSource:
         resp.raise_for_status()
         return resp.json()["data"]["attributes"]["login"]
 
+    async def project_status(self, project_id: str) -> int:
+        """Status id of a project; 0 when it no longer exists."""
+        async with self._request_slots:
+            resp = await self._client.get(f"/projects/{project_id}")
+        if resp.status_code == 404:
+            return 0
+        resp.raise_for_status()
+        return int((resp.json()["data"]["attributes"].get("status") or {}).get("id") or 0)
+
     async def project_outcome(self, project_id: str) -> tuple[int, str | None]:
         """(status id, chosen freelancer login or None) for a project."""
         async with self._request_slots:

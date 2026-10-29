@@ -15,6 +15,7 @@ from app.config import Settings, build_category
 from app.source import FreelancehuntSource
 from app.storage.users import UserContext, UserRegistry
 
+from .cleanup import ClosedProjectsCleaner
 from .loop import NotifierLoop
 
 log = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ class PublicNotifier:
         self._generator_factory = generator_factory
         self._legacy_screener = legacy_screener
         self._slots = asyncio.Semaphore(8)
+        self._cleaner = ClosedProjectsCleaner(source)
 
     async def run(self, stop_event: asyncio.Event) -> None:
         log.info("starting public notifier, interval=%ss", self._settings.poll_interval)
@@ -115,3 +117,7 @@ class PublicNotifier:
                     log.exception("notification tick failed for user %s", user.user_id)
 
         await asyncio.gather(*(deliver(user, settings) for user, settings in snapshots))
+        try:
+            await self._cleaner.clean(users, {project.id for project in projects})
+        except Exception:
+            log.exception("closed projects cleanup failed")

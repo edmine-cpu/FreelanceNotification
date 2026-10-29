@@ -31,6 +31,8 @@ class StateStore:
         # the verdict survives. Powers the filtered (📂) view in the /start menu.
         self._passed_ids: list[str] = []
         self._projects: list[Project] = []
+        # Projects that stopped accepting bids: dropped from history for good.
+        self._closed_ids: list[str] = []
         # Watermark per skill_id: the publish timestamp of the last announced
         # project in that category. Absence of an entry means "not yet seen".
         self._watermarks: dict[str, int] = {}
@@ -52,6 +54,7 @@ class StateStore:
         self._seen_ids = [str(x) for x in data.get("seen_ids", [])]
         self._passed_ids = [str(x) for x in data.get("passed_ids", [])]
         self._projects = [Project.from_dict(p) for p in data.get("projects", [])]
+        self._closed_ids = [str(x) for x in data.get("closed_ids", [])]
         raw_watermark = data.get("last_published_ts", {})
         if isinstance(raw_watermark, dict):
             self._watermarks = {str(k): int(v) for k, v in raw_watermark.items()}
@@ -78,6 +81,7 @@ class StateStore:
             "seen_ids": self._seen_ids,
             "passed_ids": self._passed_ids,
             "projects": [p.to_dict() for p in self._projects],
+            "closed_ids": self._closed_ids,
             "last_published_ts": self._watermarks,
             "skill_ids": self._skill_ids,
             "muted_skill_ids": self._muted_skill_ids,
@@ -236,8 +240,10 @@ class StateStore:
             return
         async with self._lock:
             merged: dict[str, Project] = {p.id: p for p in self._projects}
+            closed = set(self._closed_ids)
             for p in projects:
-                merged[p.id] = p
+                if p.id not in closed:
+                    merged[p.id] = p
             # Keep the most recent history_size projects PER category, so a busy
             # category can't evict another's history out of the /start menu.
             per_skill: dict[int, list[Project]] = {}
@@ -250,6 +256,24 @@ class StateStore:
             self._projects = sorted(kept, key=lambda p: p.published_ts, reverse=True)
             self._apply_category_names_to_projects()
             await self._persist_locked()
+
+    async def history_ids(self) -> list[str]:
+        async with self._lock:
+            return [project.id for project in self._projects]
+
+    async def remove_projects(self, project_ids: set[str]) -> int:
+        """Drop closed projects from the history so lists show only open ones."""
+        async with self._lock:
+            kept = [project for project in self._projects if project.id not in project_ids]
+            removed = len(self._projects) - len(kept)
+            if not removed:
+                return 0
+            self._projects = kept
+            known = set(self._closed_ids)
+            self._closed_ids += [project_id for project_id in project_ids if project_id not in known]
+            self._closed_ids = self._closed_ids[-self._seen_size:]
+            await self._persist_locked()
+            return removed
 
     async def recent_projects(self) -> list[Project]:
         async with self._lock:
