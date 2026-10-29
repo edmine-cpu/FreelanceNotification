@@ -132,6 +132,22 @@ def format_prompt_edit_prompt() -> str:
     )
 
 
+def format_cases_caption() -> str:
+    return (
+        "<b>Мои кейсы (досье)</b>\n\n"
+        "Из этого файла AI берёт похожие кейсы, цифры, гарантию и бонус для ставок. "
+        "Ничего вне файла он не придумывает. Исправь файл и загрузи его кнопкой ниже."
+    )
+
+
+def format_cases_edit_prompt() -> str:
+    return (
+        "<b>Мои кейсы (досье)</b>\n\n"
+        "Отправь файл cases.json документом (или JSON текстом, если он короткий). "
+        "Старый файл заменится целиком. /cancel — отменить ввод."
+    )
+
+
 def format_settings_notice(text: str) -> str:
     return f"<b>Настройки:</b>\n\n{html.escape(text)}"
 

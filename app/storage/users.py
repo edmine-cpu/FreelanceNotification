@@ -27,6 +27,10 @@ class UserContext:
     is_legacy_owner: bool
     _base_settings: Settings = field(repr=False, compare=False)
 
+    @property
+    def cases_path(self) -> Path:
+        return self.prompt_examples_path.parent / "cases.json"
+
     async def settings(self) -> Settings:
         """Build a request/poll snapshot without mutating application defaults."""
         skill_ids = await self.store.skill_ids(parse_skill_ids(self._base_settings.skill_ids))

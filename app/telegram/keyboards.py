@@ -30,6 +30,8 @@ CALLBACK_PROFILE_NAME = "settings:profile_name"
 CALLBACK_PROFILE_PORTFOLIO = "settings:profile_portfolio"
 CALLBACK_SYSTEM_PROMPT = "settings:system_prompt"
 CALLBACK_SYSTEM_PROMPT_EDIT = "settings:system_prompt_edit"
+CALLBACK_CASES = "settings:cases"
+CALLBACK_CASES_EDIT = "settings:cases_edit"
 
 # Filter key used in `list:<filter>:<page>` callbacks to mean "every category".
 LIST_FILTER_ALL = "all"
@@ -79,6 +81,7 @@ def settings_keyboard(*, ai_enabled: bool = False) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="👤 Моё имя и портфолио", callback_data=CALLBACK_PROFILE)],
             *([[InlineKeyboardButton(text="📝 Мой промпт", callback_data=CALLBACK_SYSTEM_PROMPT)],
                [InlineKeyboardButton(text="📑 Примеры откликов (JSON)", callback_data=CALLBACK_PROMPT_JSON)],
+               [InlineKeyboardButton(text="🗂 Мои кейсы (досье)", callback_data=CALLBACK_CASES)],
                [InlineKeyboardButton(text="Расходы AI", callback_data=CALLBACK_AI_USAGE)]] if ai_enabled else []),
             [InlineKeyboardButton(text="🔔 Уведомления категорий", callback_data=CALLBACK_NOTIFICATIONS)],
             [InlineKeyboardButton(text="🏠 В меню", callback_data=CALLBACK_START)],
@@ -167,6 +170,15 @@ def prompt_json_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def cases_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Загрузить новый файл", callback_data=CALLBACK_CASES_EDIT)],
+            [InlineKeyboardButton(text=HIDE_BUTTON_TEXT, callback_data=CALLBACK_HIDE)],
+        ]
+    )
+
+
 def settings_back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="⬅️ Настройки", callback_data=CALLBACK_SETTINGS)]]
@@ -233,9 +245,12 @@ def notification_keyboard(project_id: str, *, ai_enabled: bool = False) -> Inlin
     )
 
 
-def regen_bid_keyboard(project_id: str, version: str = "") -> InlineKeyboardMarkup:
+def regen_bid_keyboard(project_id: str, version: str = "", *, needs_case: bool = False) -> InlineKeyboardMarkup:
+    warning = [[InlineKeyboardButton(text="⚠️ Нет похожего кейса: заполни строку в [ ]",
+                                     callback_data=CALLBACK_NOOP)]] if needs_case else []
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            *warning,
             [InlineKeyboardButton(text="Новый вариант", callback_data=f"{CALLBACK_REGEN_PREFIX}{project_id}:{version}")],
             [InlineKeyboardButton(text="📤 Отправил ставку", callback_data=f"{CALLBACK_BID_SENT_PREFIX}{project_id}")],
             [InlineKeyboardButton(text=HIDE_BUTTON_TEXT, callback_data=CALLBACK_HIDE)],

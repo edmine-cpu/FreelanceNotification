@@ -136,6 +136,7 @@ def _to_project(item: dict, category: Category) -> Project | None:
             skill_id=category.skill_id,
             category_name=category.name,
             category_url=category.listing_url,
+            client_name=((attrs.get("employer") or {}).get("first_name") or "").strip(),
         )
     except Exception:
         log.exception("failed to parse project item: %s", item)

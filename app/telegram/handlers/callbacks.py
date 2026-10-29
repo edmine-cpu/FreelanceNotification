@@ -10,10 +10,11 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.config import Settings, parse_skill_ids
 from app.ai import BidGenerator, BidGenerationError
+from app.ai.cases import MAX_CASES_BYTES, CasesJsonError, write_cases_json
 from app.ai.prompt_store import PromptJsonError, read_prompt_json, write_prompt_json
 from app.ai.policy import ai_allowed, ACCESS_DENIED
 from app.source import FreelancehuntSource
@@ -45,6 +46,7 @@ class SettingsFlow(StatesGroup):
     awaiting_system_prompt = State()
     awaiting_profile_name = State()
     awaiting_profile_portfolio = State()
+    awaiting_cases = State()
 
 
 @router.callback_query(F.data == keyboards.CALLBACK_NOOP)
@@ -137,6 +139,72 @@ async def handle_prompt_json(
         await callback.answer("Не удалось отправить JSON", show_alert=True)
         return
     await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CALLBACK_CASES)
+async def handle_cases(callback: CallbackQuery, settings: Settings, cases_path: Path, state: FSMContext) -> None:
+    if not await _ensure_callback_allowed(callback, settings):
+        return
+    await state.clear()
+    try:
+        raw = cases_path.read_bytes() if cases_path.exists() else b'{"profile_facts": [], "offer": {}, "cases": []}'
+        await callback.message.answer_document(
+            BufferedInputFile(raw, filename="cases.json"),
+            caption=formatting.format_cases_caption(),
+            reply_markup=keyboards.cases_keyboard(),
+        )
+    except (OSError, TelegramAPIError):
+        log.exception("failed to send cases file")
+        await callback.answer("Не удалось отправить файл кейсов", show_alert=True)
+        return
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CALLBACK_CASES_EDIT)
+async def handle_cases_edit_menu(callback: CallbackQuery, settings: Settings, state: FSMContext) -> None:
+    if not await _ensure_callback_allowed(callback, settings):
+        return
+    await state.set_state(SettingsFlow.awaiting_cases)
+    await _send_settings_flow_message(callback, formatting.format_cases_edit_prompt(), keyboards.hide_keyboard())
+    await callback.answer()
+
+
+@router.message(SettingsFlow.awaiting_cases)
+async def handle_cases_message(
+    message: Message,
+    settings: Settings,
+    bid_generator: BidGenerator | None,
+    cases_path: Path,
+    state: FSMContext,
+) -> None:
+    if not message.from_user or not ai_allowed(message.from_user.id):
+        await state.clear()
+        await message.answer(ACCESS_DENIED)
+        return
+    if not _is_allowed_chat(message.chat.id, settings):
+        return
+    try:
+        if message.document is not None:
+            if (message.document.file_size or 0) > MAX_CASES_BYTES:
+                raise CasesJsonError("Файл кейсов слишком большой.")
+            buffer = await message.bot.download(message.document)
+            raw = buffer.read()
+        elif (message.text or "").strip():
+            raw = message.text
+        else:
+            raise CasesJsonError("Отправь файл cases.json документом.")
+        data = write_cases_json(raw, cases_path)
+    except CasesJsonError as exc:
+        await message.answer(formatting.format_settings_notice(f"{exc}\n\nОтправь исправленный файл ещё раз."))
+        return
+    except TelegramAPIError:
+        log.exception("failed to download cases file")
+        await message.answer(formatting.format_settings_notice("Не удалось скачать файл. Отправь его ещё раз."))
+        return
+    if bid_generator is not None:
+        bid_generator.reload_prompt()
+    await state.clear()
+    await message.answer(formatting.format_settings_notice(f"Кейсы обновлены: {len(data['cases'])} шт."))
 
 
 @router.callback_query(F.data == keyboards.CALLBACK_CATEGORY_NAMES)
@@ -667,7 +735,8 @@ async def _send_settings_flow_message(
 
 async def _ensure_callback_allowed(callback: CallbackQuery, settings: Settings) -> bool:
     if callback.data in {keyboards.CALLBACK_PROMPT_JSON, keyboards.CALLBACK_PROMPT_EDIT,
-                         keyboards.CALLBACK_SYSTEM_PROMPT, keyboards.CALLBACK_SYSTEM_PROMPT_EDIT} and not ai_allowed(callback.from_user.id):
+                         keyboards.CALLBACK_SYSTEM_PROMPT, keyboards.CALLBACK_SYSTEM_PROMPT_EDIT,
+                         keyboards.CALLBACK_CASES, keyboards.CALLBACK_CASES_EDIT} and not ai_allowed(callback.from_user.id):
         await callback.answer(ACCESS_DENIED, show_alert=True)
         return False
     if (

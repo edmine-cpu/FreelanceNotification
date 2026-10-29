@@ -106,7 +106,8 @@ class MigrationTest(unittest.IsolatedAsyncioTestCase):
         changed = await self.generator.generate_bid(project())
         self.assertEqual(changed["quote"], saved)
         self.assertEqual(len(self.calls), 2)
-        self.assertEqual(set(self.calls[1]["output_config"]["format"]["schema"]["properties"]), {"prose"})
+        self.assertEqual(set(self.calls[1]["output_config"]["format"]["schema"]["properties"]),
+                         {"requirements", "case_id", "case_slot", "prose"})
         self.assertIn("Новый стиль", self.calls[-1]["system"])
 
     async def test_project_change_invalidates_quote_and_text_without_mass_migration(self):

@@ -66,6 +66,7 @@ class UserContextMiddleware(BaseMiddleware):
             user_context=context,
             prompt_examples_path=context.prompt_examples_path,
             system_prompt_path=context.system_prompt_path,
+            cases_path=context.cases_path,
             bid_generator=generator,
         )
         return await handler(event, data)

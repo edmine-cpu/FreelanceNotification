@@ -285,7 +285,8 @@ class NotifierLoop:
                 text=result["rendered"],
                 parse_mode=None,
                 reply_to_message_id=reply_to,
-                reply_markup=keyboards.regen_bid_keyboard(project.id, result["version"]),
+                reply_markup=keyboards.regen_bid_keyboard(
+                    project.id, result["version"], needs_case=result.get("needs_case", False)),
             )
         except BidGenerationError as exc:
             log.warning("auto bid skipped for project %s: %s", project.id, exc)

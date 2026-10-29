@@ -69,7 +69,8 @@ async def handle_generate(callback: CallbackQuery, settings: Settings, store: St
         return
     try:
         await callback.message.reply(result["rendered"], parse_mode=None,
-                                     reply_markup=keyboards.regen_bid_keyboard(project.id, result["version"]))
+                                     reply_markup=keyboards.regen_bid_keyboard(
+                                         project.id, result["version"], needs_case=result.get("needs_case", False)))
     except TelegramAPIError:
         log.warning("could not send cached bid for project %s", project.id)
         # The persisted result will be returned by the next Generate click.
@@ -235,7 +236,8 @@ async def _deliver(message, ai_store, revision, result):
     try:
         await message.bot.edit_message_text(chat_id=revision["user_id"], message_id=revision["target"],
             text=result["rendered"], parse_mode=None,
-            reply_markup=keyboards.regen_bid_keyboard(revision["project_id"], result["version"]))
+            reply_markup=keyboards.regen_bid_keyboard(
+                revision["project_id"], result["version"], needs_case=result.get("needs_case", False)))
     except TelegramAPIError as exc:
         if isinstance(exc, TelegramBadRequest) and "message is not modified" in str(exc):
             return

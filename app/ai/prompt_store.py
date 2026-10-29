@@ -5,12 +5,18 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .pricing import contains_quote_leakage, normalize_dashes
+from .pricing import line_leaks, normalize_dashes
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 EXAMPLES_FILE = PROMPTS_DIR / "bids_examples.json"
+SYSTEM_PROMPT_FILE = PROMPTS_DIR / "system_prompt.md"
 _LEGACY_STOCK_HASHES = {
-    "7a6c669e85fd02e46058824e27d6b18cd36ffa82daf9188cb556204012890b0c"
+    "7a6c669e85fd02e46058824e27d6b18cd36ffa82daf9188cb556204012890b0c",
+    "fe3600ed7683a61fa8708308a334fc595214e1705e4dd09ba50efe37bbc2b3fc",  # three-line bids
+}
+# Raw sha256 of owner system prompts that shipped as stock and were never edited.
+_LEGACY_SYSTEM_PROMPT_HASHES = {
+    "7c01e48d8abe143829540fcbfdd79634f4726d5eeea8c2a4b1850fab7d4c5961",  # three-line bids
 }
 _PRICING_INPUT_KEYS = {
     "budget",
@@ -42,6 +48,18 @@ def ensure_prompt_json(path: Path, default_path: Path = EXAMPLES_FILE) -> None:
     _atomic_write_json(path, sanitize_prompt_data(_load_json(default_path)))
 
 
+def upgrade_stock_prompts(prompt_path: Path, examples_path: Path,
+                          prompt_default: Path = SYSTEM_PROMPT_FILE,
+                          examples_default: Path = EXAMPLES_FILE) -> None:
+    """Move an owner who never edited the shipped prompt/examples to the current ones."""
+    if prompt_path.exists() and hashlib.sha256(prompt_path.read_bytes()).hexdigest() in _LEGACY_SYSTEM_PROMPT_HASHES:
+        tmp = prompt_path.with_name(f".{prompt_path.name}.tmp")
+        tmp.write_bytes(prompt_default.read_bytes())
+        os.replace(tmp, prompt_path)
+    if examples_path.exists():
+        ensure_prompt_json(examples_path, examples_default)
+
+
 def write_prompt_json(raw: str, path: Path = EXAMPLES_FILE) -> None:
     try:
         data = json.loads(raw)
@@ -71,7 +89,7 @@ def sanitize_prompt_data(data: Any) -> dict[str, Any]:
                 payload.pop(key, None)
         lines = []
         for line in normalize_dashes(example["output"]).splitlines():
-            if not contains_quote_leakage(line):
+            if not line_leaks(line, tokens=True):
                 lines.append(line)
         example["output"] = "\n".join(lines).strip()
     return clean

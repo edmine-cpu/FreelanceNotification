@@ -14,6 +14,7 @@ class Project:
     skill_id: int = 0
     category_name: str = ""
     category_url: str = ""
+    client_name: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -32,4 +33,5 @@ class Project:
             skill_id=int(data.get("skill_id", 0)),
             category_name=data.get("category_name", ""),
             category_url=data.get("category_url", ""),
+            client_name=data.get("client_name", ""),
         )

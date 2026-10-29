@@ -495,19 +495,87 @@ def normalize_dashes(text: str) -> str:
     return normalized
 
 
-def sanitize_prose(text: str, *, vague: bool) -> str:
-    """Keep the model's lines minus pricing leaks and questions; every kept
-    line becomes its own paragraph separated by a blank line."""
-    kept: list[str] = []
-    for raw_line in normalize_dashes(text).splitlines():
+def sanitize_prose(text: str, *, vague: bool, tokens: dict[str, str] | None = None,
+                   allowed_durations: frozenset[tuple[str, str]] = frozenset()) -> str:
+    """Keep the model's lines minus pricing leaks (and, for vague projects,
+    questions). Blank lines the model wrote separate paragraphs; without any,
+    every kept line is its own paragraph and list items stay together."""
+    source = normalize_dashes(text).replace("**", "").strip()
+    paragraphs = any(not line.strip() for line in source.splitlines())
+    out: list[str] = []
+    previous, gap = "", False
+    for raw_line in source.splitlines():
         line = raw_line.strip()
-        line = _without_questions(line)
-        if not line or contains_quote_leakage(line):
+        if not line:
+            gap = True
+            continue
+        if vague:
+            line = _without_questions(line)
+        if not line or line_leaks(line, allowed_durations=allowed_durations, tokens=tokens is not None):
             continue
         if vague and (_CLARIFICATION_RE.search(line) or _CLOSING_RE.search(line)):
             continue
-        kept.append(line)
-    return "\n\n".join(kept)
+        line = fill_tokens(line, tokens or {})
+        if out:
+            together = not gap if paragraphs else bool(
+                _LIST_ITEM_RE.match(line) and (_LIST_ITEM_RE.match(previous) or previous.endswith(":")))
+            out.append("\n" if together else "\n\n")
+        out.append(line)
+        previous, gap = line, False
+    return "".join(out)
+
+
+PRICE_TOKENS = ("{price}", "{deadline}")
+_LIST_ITEM_RE = re.compile(r"^(?:-|•|\d{1,2}[.)])\s")
+_LIST_NUMBER_RE = re.compile(r"^\d{1,2}[.)]\s+")
+_DIGITS_RE = re.compile(r"\d")
+_TIME_UNIT_RE = re.compile(rf"(?i)\b{_TIME_UNIT_PATTERN}\b")
+_DURATION_RE = re.compile(rf"(?i)\b(\d+)\s*({_TIME_UNIT_PATTERN})\b")
+_UNIT_KINDS = (("дн", "day"), ("ден", "day"), ("недел", "week"), ("тиж", "week"),
+               ("месяц", "month"), ("місяц", "month"), ("час", "hour"), ("год", "god"))
+
+
+def _unit_kind(unit: str) -> str:
+    return next((kind for prefix, kind in _UNIT_KINDS if unit.lower().startswith(prefix)), unit.lower())
+
+
+def durations(text: str) -> frozenset[tuple[str, str]]:
+    """(number, unit kind) pairs in trusted text: "90 дней" also allows "90 днів"."""
+    return frozenset((number, _unit_kind(unit)) for number, unit in _DURATION_RE.findall(text))
+
+
+def line_leaks(line: str, *, allowed_durations: frozenset[tuple[str, str]] = frozenset(),
+               tokens: bool = False) -> bool:
+    """contains_quote_leakage plus the sanctioned exceptions: {price}/{deadline}
+    placeholders the program fills, numbered headings without figures
+    ("3. Стоимость и сроки") and durations taken from the author's dossier."""
+    if any(token in line for token in PRICE_TOKENS):
+        if not tokens:
+            return True
+        rest = _LIST_NUMBER_RE.sub("", fill_tokens(line, dict.fromkeys(PRICE_TOKENS, "")))
+        return bool(_DIGITS_RE.search(rest) or _CURRENCY_OR_PLACEHOLDER_RE.search(rest))
+    body = _LIST_NUMBER_RE.sub("", line)
+    if (body != line and len(body) <= 60 and not _DIGITS_RE.search(body)
+            and not _CURRENCY_OR_PLACEHOLDER_RE.search(body) and not _TIME_UNIT_RE.search(body)):
+        return bool(_PRICING_DISCUSSION_RE.search(body))
+    if allowed_durations:
+        line = _DURATION_RE.sub(
+            lambda match: "" if (match[1], _unit_kind(match[2])) in allowed_durations else match[0], line)
+    return contains_quote_leakage(line)
+
+
+def fill_tokens(text: str, tokens: dict[str, str]) -> str:
+    for token, value in tokens.items():
+        text = text.replace(token, value)
+    return text
+
+
+def quote_tokens(quote: PricingQuote, language: Language) -> dict[str, str]:
+    if quote.omitted or quote.amount is None or quote.currency is None or quote.deadline is None:
+        return {}
+    start, end = (int(item) for item in quote.deadline.split("-", 1))
+    return {"{price}": f"{_format_decimal(quote.amount)} {_CURRENCY_LABELS[quote.currency]}",
+            "{deadline}": f"{quote.deadline} {_calendar_days(start, end, language)}"}
 
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
@@ -536,13 +604,17 @@ def contains_quote_leakage(line: str) -> bool:
     )
 
 
-def render_bid(prose: str, quote: PricingQuote, language: Language) -> str:
-    body = sanitize_prose(prose, vague=quote.omitted)
+def render_bid(prose: str, quote: PricingQuote, language: Language, *,
+               allowed_durations: frozenset[tuple[str, str]] = frozenset()) -> str:
+    tokens = quote_tokens(quote, language)
+    body = sanitize_prose(prose, vague=quote.omitted, tokens=tokens or None, allowed_durations=allowed_durations)
     if not body:
         raise ValueError("model prose is empty after pricing sanitization")
     if quote.omitted:
         closing = "Пишите, обсудим детали" if language == "ru" else "Пишіть, обговоримо деталі"
         return normalize_dashes(f"{body}\n\n{closing}")
+    if any(value in body for value in tokens.values()):
+        return normalize_dashes(body)  # the quote already sits where the client asked for it
     return normalize_dashes(f"{body}\n\n{format_quote_line(quote, language)}")
 
 

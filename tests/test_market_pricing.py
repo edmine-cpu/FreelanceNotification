@@ -57,11 +57,12 @@ class TablePricingTests(unittest.TestCase):
         legacy = self.quote("8")
         self.assertEqual(legacy.hours, 8)
 
-    def test_paragraphs_and_no_questions(self):
+    def test_paragraphs_keep_questions_for_concrete_projects(self):
         from app.ai.pricing import render_bid
-        prose = "Здравствуйте.\nСделаю бота записи на Python. Есть документация?\nВопрос: оплата нужна\nПохожий бот уже работает у клиента."
+        prose = "Здравствуйте.\nСделаю бота записи на Python. Есть документация?\nПохожий бот уже работает у клиента."
         rendered = render_bid(prose, self.quote("bot:M"), "ru")
-        self.assertEqual(rendered, "Здравствуйте.\n\nСделаю бота записи на Python.\n\nПохожий бот уже работает у клиента."
+        self.assertEqual(rendered, "Здравствуйте.\n\nСделаю бота записи на Python. Есть документация?"
+                                   "\n\nПохожий бот уже работает у клиента."
                                    "\n\nЦена 3500 грн, срок 2-3 дня, начну сегодня. Пишите")
 
     def test_ukrainian_quote_line_uses_termin(self):
@@ -130,7 +131,7 @@ class BidLogTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CombinedGenerationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_model_tier_prices_logs_and_forbids_unrequested_stages(self):
+    async def test_model_tier_prices_logs_and_limits_stages_to_requests(self):
         import json
         from app.ai.bid_generator import BID_SCHEMA, BidGenerator
         from app.ai.pricing import StaticRatesSource
@@ -150,7 +151,7 @@ class CombinedGenerationTests(unittest.IsolatedAsyncioTestCase):
         result = await generator.generate_bid(project("3800 UAH", "77"))
         self.assertIn("Цена 9500 грн, срок 5-7 дней, начну сегодня. Пишите", result["rendered"])
         system, schema = client.calls[0]
-        self.assertIn("Не предлагай разбивку на этапы", system)
+        self.assertIn("Этапы работ описывай, только если заказчик сам их просит", system)
         self.assertIn("crm (CRM", system)
         self.assertEqual(schema["properties"]["scope_tier"]["enum"], BID_SCHEMA["properties"]["scope_tier"]["enum"])
         row = dict(store.db.execute("SELECT * FROM bid_log").fetchone())

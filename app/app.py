@@ -7,7 +7,9 @@ from app.config import Settings
 from app.ai import BidGenerator, AnthropicClient, OrderScreener
 from app.ai.policy import AI_OWNER_ID, ai_allowed
 from app.ai.store import AIStore
+from app.ai.cases import ensure_cases_json
 from app.ai.pricing import AtomicQuoteStore
+from app.ai.prompt_store import upgrade_stock_prompts
 from app.notifier.outcomes import OutcomeTracker
 from app.notifier.public import PublicNotifier
 from app.rates import RatesProvider
@@ -67,11 +69,14 @@ async def run(settings: Settings) -> None:
         if bid_client is None or not ai_allowed(user.user_id):
             return None
         if user.user_id not in generators:
+            upgrade_stock_prompts(user.system_prompt_path, user.prompt_examples_path)
+            ensure_cases_json(user.cases_path)
             generators[user.user_id] = BidGenerator(
                 bid_client, user_id=user.user_id, ai_store=ai_store,
                 examples_path=user.prompt_examples_path, system_prompt_path=user.system_prompt_path,
                 profile_provider=user.store.profile, rates_provider=rates_provider,
-                quote_store=AtomicQuoteStore(user.quote_path), max_context_chars=settings.ai_max_context_chars)
+                quote_store=AtomicQuoteStore(user.quote_path), max_context_chars=settings.ai_max_context_chars,
+                cases_path=user.cases_path)
         return generators[user.user_id]
 
     dispatcher = build_dispatcher(settings, registry, generator_for, source, ai_store=ai_store)
