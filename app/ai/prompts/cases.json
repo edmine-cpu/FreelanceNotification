@@ -211,7 +211,7 @@
       "result": "продажи идут автоматически, без ручной обработки заказов",
       "stack": "Python, aiogram 3",
       "proof": "работает в продакшене",
-      "link": "https://t.me/FortuneXStarsBot",
+      "link": "",
       "metric": "заказы обрабатываются 24/7 без оператора"
     },
     {
@@ -266,7 +266,7 @@
       "result": "скачивание в один шаг прямо в Telegram",
       "stack": "Python, aiogram 3",
       "proof": "работает в продакшене",
-      "link": "https://t.me/DowloandVideoPhoto_bot",
+      "link": "",
       "metric": "1 сообщение со ссылкой - и файл уже в чате"
     },
     {

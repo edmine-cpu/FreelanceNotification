@@ -79,6 +79,22 @@ class CasesFileTests(unittest.TestCase):
             ensure_cases_json(path)
             self.assertEqual(path.read_text(), '{"cases": []}')
 
+    def test_unedited_stock_dossier_is_upgraded(self):
+        from app.ai import cases as cases_module
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cases.json"
+            path.write_text('{"cases": []}')
+            stock = {hashlib.sha256(path.read_bytes()).hexdigest()}
+            with patch.object(cases_module, "_LEGACY_CASES_HASHES", stock):
+                ensure_cases_json(path)
+            self.assertEqual(path.read_bytes(), CASES_FILE.read_bytes())
+            self.assertNotIn(b"t.me", path.read_bytes())
+
+    def test_api_names_are_requested_in_ukrainian(self):
+        from app.source import FreelancehuntSource
+        source = FreelancehuntSource("token", [])
+        self.assertEqual(source._client.headers["Accept-Language"], "uk")
+
     def test_unedited_stock_prompt_is_upgraded_custom_is_kept(self):
         with tempfile.TemporaryDirectory() as tmp:
             old, custom, examples = Path(tmp) / "old.md", Path(tmp) / "custom.md", Path(tmp) / "ex.json"
@@ -141,6 +157,14 @@ class GeneratorTests(unittest.IsolatedAsyncioTestCase):
             slot="Делал похожий сервис для ..."))
         self.assertIn("👋 Здравствуйте!\n\n[Делал похожий сервис для ...]\n\nДелал бота", result["rendered"])
         self.assertTrue(result["needs_case"])
+
+    async def test_telegram_and_email_contacts_never_reach_the_bid(self):
+        result = await self.generate(self.answer(
+            "👋 Здравствуйте!\nДелал бота записи. Работает: @FortuneXStarsBot.\nДемо: https://t.me/demo_bot\n"
+            "Пишите в Telegram @nikita_dev или на mail@example.com"))
+        for contact in ("@", "t.me", "Демо", "Работает", "Пишите в Telegram", "example.com"):
+            self.assertNotIn(contact, result["rendered"])
+        self.assertIn("Делал бота записи.", result["rendered"])
 
     async def test_uncovered_answer_and_unknown_case_trigger_one_correction(self):
         result = await self.generate(

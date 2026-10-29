@@ -17,6 +17,7 @@ _LEGACY_STOCK_HASHES = {
 # Raw sha256 of owner system prompts that shipped as stock and were never edited.
 _LEGACY_SYSTEM_PROMPT_HASHES = {
     "7c01e48d8abe143829540fcbfdd79634f4726d5eeea8c2a4b1850fab7d4c5961",  # three-line bids
+    "eb4eae66d09ae49fd43943873789f39fa1146760f009feec94437ab06fe94e31",  # before the no-contacts rule
 }
 _PRICING_INPUT_KEYS = {
     "budget",

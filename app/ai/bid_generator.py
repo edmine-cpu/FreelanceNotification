@@ -39,6 +39,13 @@ _PERSONAL_IDENTITY_RE = re.compile(
     r"|^\s*(?:с\s+уважением|з\s+повагою|regards)[,\s])"
     r"|(?:^|[,!?.]\s*)(?:[Яя]|I am|I'm)\s+[A-ZА-ЯІЇЄҐ][a-zа-яіїєґ]+\b"
 )
+# Freelancehunt forbids contacts outside the platform in bids.
+_CONTACT_RE = re.compile(
+    r"[\w.+-]+@[\w-]+\.[\w.-]+"
+    r"|(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|wa\.me|viber\.click)/\S*"
+    r"|(?<![\w.])@[A-Za-z][\w]{3,}",
+    re.IGNORECASE,
+)
 _UA_ONLY_LETTERS = set("іїєґІЇЄҐ")
 # The analysis precedes the prose so the model lists the client's needs before writing.
 ANALYSIS_PROPERTIES = {
@@ -145,6 +152,7 @@ class BidGenerator:
             "стоимость или сроки, поставь метки {price} и {deadline} туда, где они нужны: "
             "программа подставит свою оценку. Этапы работ описывай, только если заказчик сам их просит. "
             "Опыт, кейсы, цифры и ссылки бери только из досье автора, ничего не придумывай. "
+            "Не указывай контакты вне Freelancehunt: Telegram, @username, t.me, телефон, email. "
             "Текущий профиль — единственный достоверный источник личности: "
             + json.dumps(profile or {}, ensure_ascii=False)
             + "\n\n" + dossier_text(cases)
@@ -212,7 +220,8 @@ class BidGenerator:
                     data = _parse_response(response.text, combined)
                     if quote is None:
                         quote = await self._quotes.save_tier(project, data["scope_tier"])
-                    prose = _without_personal_identity(data["prose"])
+                    prose = _without_contacts(_without_personal_identity(data["prose"]))
+                    data["case_slot"] = _without_contacts(data["case_slot"])
                     if previous and prose == previous["prose"]:
                         raise LLMResponseError("AI повторил предыдущий текст. Старая ставка сохранена; можно явно повторить попытку.")
                     rendered, problems = _render_checked(prose, data, quote, lang, cases)
@@ -313,6 +322,19 @@ def _with_case_slot(rendered: str, slot: str) -> str:
             text = f"{head}\n\n{line}\n\n{tail}" if separator else f"{line}\n\n{head}"
     text = "\n".join(row for row in text.split("\n") if row.strip() or not row)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _without_contacts(text: str) -> str:
+    """Drop every sentence that carries a Telegram/email contact."""
+    lines = []
+    for line in text.splitlines():
+        if _CONTACT_RE.search(line):
+            line = " ".join(sentence for sentence in re.split(r"(?<=[.!?])\s+", line)
+                            if not _CONTACT_RE.search(sentence))
+            if not line.strip():
+                continue
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _comparable(text: str) -> str:

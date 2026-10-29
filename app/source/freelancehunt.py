@@ -36,6 +36,8 @@ class FreelancehuntSource:
             headers={
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/json",
+                # Names come back as written on the site (Микола), not transliterated.
+                "Accept-Language": "uk",
                 "User-Agent": "freelancehunt-notifier/1.0 (+telegram-bot)",
             },
         )

@@ -1,5 +1,7 @@
 """The author's dossier: profile facts, offer and real cases a bid may cite."""
+import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,10 @@ from .prompt_store import _atomic_write_json
 CASES_FILE = Path(__file__).parent / "prompts" / "cases.json"
 MAX_CASES_BYTES = 200_000
 _CASE_FIELDS = ("title", "tags", "did", "result", "metric", "stack", "proof", "link")
+# Raw sha256 of stock dossiers that shipped and were never edited.
+_LEGACY_CASES_HASHES = {
+    "e40409c46e4b8b673eb51443ae534c77277671e5b0a3110344ccb9a1c6f9a1c8",  # with t.me demo links
+}
 
 
 class CasesJsonError(ValueError):
@@ -21,9 +27,15 @@ def empty_cases() -> dict[str, Any]:
 
 
 def ensure_cases_json(path: Path, default_path: Path = CASES_FILE) -> None:
-    if not path.exists() and default_path.exists():
+    if not default_path.exists():
+        return
+    if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(default_path, path)
+    elif hashlib.sha256(path.read_bytes()).hexdigest() in _LEGACY_CASES_HASHES:
+        tmp = path.with_name(f".{path.name}.tmp")
+        shutil.copyfile(default_path, tmp)
+        os.replace(tmp, path)
 
 
 def load_cases(path: Path | None) -> dict[str, Any]:
