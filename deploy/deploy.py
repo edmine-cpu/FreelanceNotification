@@ -34,7 +34,7 @@ def write_json(path, value):
 
 class Deployer:
     def __init__(self):
-        self.app = Path(os.environ.get("APP_DIR", "/opt/FreelanceNotifycation")).resolve()
+        self.app = Path(os.environ.get("APP_DIR", "/opt/FreelanceNotification")).resolve()
         self.state = Path(os.environ.get("DEPLOY_STATE_DIR", "/var/lib/freelancenotify-deploy"))
         self.branch = os.environ.get("DEPLOY_BRANCH", "main")
         self.project = "freelancenotifycation"

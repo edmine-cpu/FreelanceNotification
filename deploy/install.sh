@@ -9,7 +9,7 @@ python3 -c 'import sys; assert sys.version_info >= (3, 12), "Python 3.12+ requir
 command -v git >/dev/null
 docker compose version >/dev/null
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-app_dir=${APP_DIR:-/opt/FreelanceNotifycation}
+app_dir=${APP_DIR:-/opt/FreelanceNotification}
 test -d "$app_dir/.git"
 test -f "$app_dir/.env"
 test -d "$app_dir/data"

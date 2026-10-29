@@ -4,11 +4,38 @@
 git push origin main → проверка сервером раз в 60 секунд → сборка → тесты → перезапуск
 ```
 
-Обновляется `/opt/FreelanceNotifycation`, контейнер `fh-bots-notifier`.
+Обновляется `/opt/FreelanceNotification`, контейнер `fh-bots-notifier`.
 Ветка `main` — источник production. Проверка запускается systemd-таймером,
 поэтому GitHub Actions, SSH-секреты в GitHub и открытые webhook-порты не нужны.
 Репозиторий публичный; сервер читает его по HTTPS. При переводе репозитория
 в private потребуется настроить на сервере доступ на чтение.
+
+## Скилл и быстрый порядок работы
+
+Для ИИ-агентов есть скилл **`freelancenotify-server`**:
+`/Users/nikitasorokin/.codex/skills/freelancenotify-server/SKILL.md`.
+Он описывает разрешённое подключение, область работ и сохранение данных.
+На этом Mac используй `ssh freelancenotify-prod`: SSH-ключ уже настроен, пароль не нужен.
+Общие правила экономной работы находятся в [AGENTS.md](../AGENTS.md).
+
+Автодеплой установлен и проверен 2026-09-28; повторная первоначальная настройка не нужна.
+
+1. Проверь изменения и нужные тесты, закоммить только файлы своей задачи.
+2. Отправь готовую версию: `git push origin main`.
+3. Подожди до минуты до начала обновления плюс время сборки и проверки запуска.
+4. Проверь результат одним подключением:
+
+   ```sh
+   ssh freelancenotify-prod 'systemctl is-active freelancenotify-deploy.timer; cat /var/lib/freelancenotify-deploy/deployed.json; docker inspect fh-bots-notifier --format "status={{.State.Status}} restarts={{.RestartCount}}"'
+   ```
+
+   Поле `revision` должно совпасть с отправленным commit (`git rev-parse HEAD`),
+   контейнер должен работать без повторных рестартов. При незавершённом или неудачном
+   деплое прочитай последние строки `journalctl -u freelancenotify-deploy.service -n 60 --no-pager`.
+   Не запускай параллельно ручную сборку или второй процесс бота.
+
+Серверный checkout закрепляется на SHA (detached HEAD); это нормально.
+Команды `git pull` и обычный `docker compose up --build` на сервере для обновления не нужны.
 
 ## Что происходит после push
 
@@ -37,7 +64,7 @@ Docker запускает бота после перезагрузки серв�
 ## Управление
 
 ```sh
-ssh root@173.242.51.44
+ssh freelancenotify-prod
 systemctl status freelancenotify-deploy.timer
 journalctl -u freelancenotify-deploy.service -n 100 --no-pager
 docker logs --tail 100 fh-bots-notifier
@@ -58,8 +85,8 @@ systemctl start freelancenotify-deploy.timer
 
 ```sh
 docker compose --project-name freelancenotifycation \
-  --project-directory /opt/FreelanceNotifycation \
-  -f /opt/FreelanceNotifycation/docker-compose.yml \
+  --project-directory /opt/FreelanceNotification \
+  -f /opt/FreelanceNotification/docker-compose.yml \
   -f /var/lib/freelancenotify-deploy/compose-image.json \
   up -d --no-build --pull never bot
 ```
@@ -70,13 +97,15 @@ docker compose --project-name freelancenotifycation \
 с контейнером `fh-bots-notifier`, `.env` и `data/`.
 
 ```sh
-cd /opt/FreelanceNotifycation
+cd /opt/FreelanceNotification
 sudo sh deploy/install.sh
 ```
 
 Настройки путей и ветки: `/etc/default/freelancenotify-deploy`. Установленная копия
-скрипта лежит в `/usr/local/sbin/freelancenotify-deploy`; после изменения `deploy/`
-повтори установку. Обычные изменения бота применяются автоматически.
+скрипта лежит в `/usr/local/sbin/freelancenotify-deploy`. После изменения `deploy/deploy.py`,
+`deploy/install.sh` или unit-файлов дождись получения новой версии сервером и повтори
+установку. Правки документации и тестов переустановки не требуют.
+Обычные изменения бота применяются автоматически.
 
 Проверка обработки ошибок деплоя без Docker и без production-данных:
 
