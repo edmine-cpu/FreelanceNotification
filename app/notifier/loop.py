@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -68,7 +67,6 @@ class NotifierLoop:
 
     async def run(self, stop_event: asyncio.Event) -> None:
         log.info("starting notifier loop, interval=%ss", self._settings.poll_interval)
-        await self.rebuild_filter()
         while not stop_event.is_set():
             try:
                 await self._tick()
@@ -79,39 +77,6 @@ class NotifierLoop:
             except asyncio.TimeoutError:
                 pass
         log.info("notifier loop stopped")
-
-    async def rebuild_filter(self) -> None:
-        """Re-run the primary check over all currently open projects and rebuild
-        the filtered (📂) set from scratch. Runs once on each bot launch, before
-        the polling loop. Sends no notifications — it only repopulates passed_ids.
-        No-op when AI is off (then 📂 simply shows everything via an empty set)."""
-        if self._screener is None:
-            return
-        try:
-            projects = await self._source.fetch_projects()
-        except Exception:
-            log.exception("filter rebuild: fetch failed, keeping previous filtered set")
-            return
-        if projects:
-            await self._store.add_projects(projects)
-        # Re-screen everything the /start lists can show, not only open orders,
-        # so the 📂 view follows the current prompt.
-        projects = await self._store.recent_projects()
-        log.info("filter rebuild: screening %d projects (once at startup)…", len(projects))
-        started = time.monotonic()
-        slots = asyncio.Semaphore(8)
-
-        async def allowed(project: Project) -> bool:
-            async with slots:
-                return (await self._screener.screen(project)).allowed
-
-        verdicts = await asyncio.gather(*(allowed(project) for project in projects))
-        passed = [project.id for project, ok in zip(projects, verdicts) if ok]
-        await self._store.set_passed(passed)
-        log.info(
-            "filter rebuild done in %.1fs: %d/%d projects passed the primary check",
-            time.monotonic() - started, len(passed), len(projects),
-        )
 
     async def _tick(
         self,

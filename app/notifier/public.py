@@ -64,7 +64,6 @@ class PublicNotifier:
 
     async def run(self, stop_event: asyncio.Event) -> None:
         log.info("starting public notifier, interval=%ss", self._settings.poll_interval)
-        await self._rebuild_owner_filter()
         while not stop_event.is_set():
             try:
                 await self._tick()
@@ -74,24 +73,6 @@ class PublicNotifier:
                 await asyncio.wait_for(stop_event.wait(), self._settings.poll_interval)
             except asyncio.TimeoutError:
                 pass
-
-    async def _rebuild_owner_filter(self) -> None:
-        """Once per launch, re-screen the AI owner's stored orders so the 📂 view
-        reflects the current screening prompt."""
-        if self._legacy_screener is None:
-            return
-        for user in await self._registry.users():
-            if not ai_allowed(user.user_id):
-                continue
-            try:
-                settings = await user.settings()
-                self._source.set_categories(list(settings.categories))
-                await NotifierLoop(
-                    self._bot, user.store, self._source, settings,
-                    screener=self._legacy_screener, user_id=user.user_id,
-                ).rebuild_filter()
-            except Exception:
-                log.exception("filter rebuild failed for user %s", user.user_id)
 
     async def _tick(self) -> None:
         users = [u for u in await self._registry.users() if await u.store.is_active()]
