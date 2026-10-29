@@ -148,6 +148,11 @@ def format_cases_edit_prompt() -> str:
     )
 
 
+def format_bid(rendered: str) -> str:
+    """A code block: Telegram copies the whole bid with one tap."""
+    return f"<pre>{html.escape(rendered)}</pre>"
+
+
 def format_settings_notice(text: str) -> str:
     return f"<b>Настройки:</b>\n\n{html.escape(text)}"
 

@@ -71,7 +71,7 @@ class AutoBidTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(bot.send_message.await_count, 1 + int(expected))
                 if expected:
                     reply = bot.send_message.await_args_list[1].kwargs
-                    self.assertEqual((reply["text"], reply["reply_to_message_id"]), ("Здравствуйте.", 555))
+                    self.assertEqual((reply["text"], reply["reply_to_message_id"]), ("<pre>Здравствуйте.</pre>", 555))
                     buttons = [b.callback_data for row in reply["reply_markup"].inline_keyboard for b in row]
                     self.assertIn("sent:1", buttons)
 

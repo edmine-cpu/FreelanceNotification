@@ -16,7 +16,7 @@ from app.ai.store import AIStore
 from app.config import Settings
 from app.llm import QuotaExceededError
 from app.storage import StateStore
-from .. import keyboards
+from .. import formatting, keyboards
 
 router = Router(name="ai_actions")
 log = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ async def handle_generate(callback: CallbackQuery, settings: Settings, store: St
         await callback.message.answer(str(exc), parse_mode=None)
         return
     try:
-        await callback.message.reply(result["rendered"], parse_mode=None,
+        await callback.message.reply(formatting.format_bid(result["rendered"]), parse_mode="HTML",
                                      reply_markup=keyboards.regen_bid_keyboard(
                                          project.id, result["version"], needs_case=result.get("needs_case", False)))
     except TelegramAPIError:
@@ -235,7 +235,7 @@ async def _deliver(message, ai_store, revision, result):
     ai_store.finish_revision(revision["id"], "success", saved)
     try:
         await message.bot.edit_message_text(chat_id=revision["user_id"], message_id=revision["target"],
-            text=result["rendered"], parse_mode=None,
+            text=formatting.format_bid(result["rendered"]), parse_mode="HTML",
             reply_markup=keyboards.regen_bid_keyboard(
                 revision["project_id"], result["version"], needs_case=result.get("needs_case", False)))
     except TelegramAPIError as exc:

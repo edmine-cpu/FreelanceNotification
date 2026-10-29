@@ -282,8 +282,8 @@ class NotifierLoop:
             result = await generator.generate_bid(project, operation_id=f"auto:{project.id}")
             await self._bot.send_message(
                 chat_id=self._settings.telegram_chat_id,
-                text=result["rendered"],
-                parse_mode=None,
+                text=formatting.format_bid(result["rendered"]),
+                parse_mode="HTML",
                 reply_to_message_id=reply_to,
                 reply_markup=keyboards.regen_bid_keyboard(
                     project.id, result["version"], needs_case=result.get("needs_case", False)),
