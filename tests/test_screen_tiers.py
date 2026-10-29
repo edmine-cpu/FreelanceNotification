@@ -39,8 +39,9 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
 
         screener = Mock(screen=AsyncMock())
         registry = Mock(users=AsyncMock(return_value=[]))
-        notifier = PublicNotifier(AsyncMock(), registry, Mock(), SimpleNamespace(poll_interval=60),
-                                  Mock(), screener)
+        from pathlib import Path
+        settings = SimpleNamespace(poll_interval=60, state_file=Path("/nonexistent/state.json"))
+        notifier = PublicNotifier(AsyncMock(), registry, Mock(), settings, Mock(), screener)
         stop = asyncio.Event()
         stop.set()
         await notifier.run(stop)

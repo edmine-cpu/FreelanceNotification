@@ -50,6 +50,17 @@ class ClosedProjectsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(source.calls), ["done", "err", "gone", "open"])
         self.assertEqual(len(await self.store.history_ids()), 4)
 
+    async def test_runs_every_interval_and_keeps_check_times_across_restarts(self):
+        source = Source({"open": 11, "done": 11, "gone": 11, "err": 11})
+        times = Path(self.tmp.name) / "closed_checks.json"
+        cleaner = ClosedProjectsCleaner(source, times, max_checks=2, interval=900)
+        self.assertEqual(await cleaner.maybe_clean([self.user], set()), 0)
+        self.assertEqual(source.calls, [])  # the first run waits a full interval
+        await cleaner.clean([self.user], set())
+        first = set(source.calls)
+        await ClosedProjectsCleaner(source, times, max_checks=2).clean([self.user], set())
+        self.assertEqual(set(source.calls[2:]), {"open", "done", "gone", "err"} - first)
+
 
 if __name__ == "__main__":
     unittest.main()

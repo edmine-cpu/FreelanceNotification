@@ -62,7 +62,7 @@ class PublicNotifier:
         self._generator_factory = generator_factory
         self._legacy_screener = legacy_screener
         self._slots = asyncio.Semaphore(8)
-        self._cleaner = ClosedProjectsCleaner(source)
+        self._cleaner = ClosedProjectsCleaner(source, settings.state_file.parent / "closed_checks.json")
 
     async def run(self, stop_event: asyncio.Event) -> None:
         log.info("starting public notifier, interval=%ss", self._settings.poll_interval)
@@ -118,6 +118,6 @@ class PublicNotifier:
 
         await asyncio.gather(*(deliver(user, settings) for user, settings in snapshots))
         try:
-            await self._cleaner.clean(users, {project.id for project in projects})
+            await self._cleaner.maybe_clean(users, {project.id for project in projects})
         except Exception:
             log.exception("closed projects cleanup failed")
