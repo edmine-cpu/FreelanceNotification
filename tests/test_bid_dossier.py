@@ -147,6 +147,7 @@ class GeneratorTests(unittest.IsolatedAsyncioTestCase):
         call = self.client.calls[0]
         self.assertIn("- booking: Бот записи", call["system"])
         self.assertEqual(json.loads(call["messages"][-1].text)["client_name"], "Олег")
+        self.assertIn("Имя заказчика (client_name) пиши на языке отклика", call["system"])
         self.assertEqual(list(call["schema"]["properties"])[-1], "prose")
         self.assertFalse(result["needs_case"])
         self.assertEqual(len(self.client.calls), 1)
