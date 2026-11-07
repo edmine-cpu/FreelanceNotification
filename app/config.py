@@ -113,7 +113,8 @@ class Settings(BaseSettings):
     ai_user_id: int | None = Field(default=None, exclude=True)
     primary_filter_enabled: bool = False
     # Reply to each "core" order notification with a ready bid (owner only).
-    ai_auto_bid: bool = True
+    # Off by default: bids are generated only by the button.
+    ai_auto_bid: bool = False
 
     @field_validator("ai_user_id", mode="before")
     @classmethod
